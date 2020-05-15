@@ -388,6 +388,11 @@ String pull(char *df_name){
     // point to the first element of samples
     string_index = get_ret_str.indexOf("[", string_index);
 
+    // No elements
+    if(string_index == -1) {
+        return "___NULL_DATA___";
+    }
+
     // find the position of \" and \"
     int posStartQuotation, posEndQuotation;
     posStartQuotation = get_ret_str.indexOf("\"", string_index);
