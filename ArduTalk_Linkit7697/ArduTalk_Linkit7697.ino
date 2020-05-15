@@ -258,7 +258,7 @@ void connect_to_wifi(char *wifiSSID, char *wifiPASS){
 
   if(WiFi.status() == WL_CONNECTED){
     Serial.println ( "Connected!\n");
-    digitalWrite(ON_BOARD_LED_PIN,LOW);
+    digitalWrite(ON_BOARD_LED_PIN, LOW);
     wifimode = 0;
   }
   else if (millis() - connecttimeout > 10000){
@@ -338,7 +338,7 @@ int push(char *df_name, String value){
     int httpCode = http.PUT(data);
     if (httpCode != 200) Serial.println("[HTTP] PUSH \"" + String(df_name) + "\"... code: " + (String)httpCode + ", retry to register.");
     while (httpCode != 200){
-        digitalWrite(4, LOW);
+        digitalWrite(ON_BOARD_LED_PIN, LOW);
         digitalWrite(ON_BOARD_LED_PIN, HIGH);
         httpCode = iottalk_register();
         if (httpCode == 200){
@@ -359,7 +359,7 @@ String pull(char *df_name){
     
     if (httpCode != 200) Serial.println("[HTTP] "+url + String(df_name)+" PULL \"" + String(df_name) + "\"... code: " + (String)httpCode + ", retry to register.");
     while (httpCode != 200){
-        digitalWrite(4, LOW);
+        digitalWrite(ON_BOARD_LED_PIN, LOW);
         digitalWrite(ON_BOARD_LED_PIN, HIGH);
         httpCode = iottalk_register();
         if (httpCode == 200){
@@ -405,7 +405,7 @@ long sensorValue, suspend = 0;
 long cycleTimestamp = millis();
 void setup() {
     pinMode(ON_BOARD_LED_PIN, OUTPUT);// D4 : on board led
-    digitalWrite(ON_BOARD_LED_PIN,HIGH);
+    digitalWrite(ON_BOARD_LED_PIN, HIGH);
     // pinMode(ON_BOARD_BTN_PIN, INPUT_PULLUP); // D3, GPIO0: clear eeprom button
     // clear eeprom button (use interrupt instead.)
     attachInterrupt(ON_BOARD_BTN_PIN, clr_eeprom, CHANGE); 
@@ -451,7 +451,7 @@ void setup() {
 
     digitalWrite(16,LOW);
     digitalWrite(5,LOW);    
-    digitalWrite(4,LOW);
+    digitalWrite(ON_BOARD_LED_PIN,LOW);
     digitalWrite(14,LOW);    
     digitalWrite(12,LOW);    
     digitalWrite(13,LOW);    
@@ -525,10 +525,10 @@ void loop() {
     }
 
     if (!LEDhadFlashed){
-      digitalWrite(ON_BOARD_LED_PIN, 0);
+      digitalWrite(ON_BOARD_LED_PIN, LOW);
       LEDhadFlashed = 1;
       LEDonCycle = millis();
     }
 
-    if (millis()-LEDonCycle > 1) digitalWrite(ON_BOARD_LED_PIN, 1);
+    if (millis()-LEDonCycle > 1) digitalWrite(ON_BOARD_LED_PIN, HIGH);
 }
