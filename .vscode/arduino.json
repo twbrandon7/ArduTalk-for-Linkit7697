@@ -1,4 +1,5 @@
 {
     "sketch": "ArduTalk_Linkit7697/ArduTalk_Linkit7697.ino",
-    "board": "LinkIt:linkit_rtos:linkit_7697"
+    "board": "LinkIt:linkit_rtos:linkit_7697",
+    "port": "COM4"
 }

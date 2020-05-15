@@ -1,21 +1,24 @@
 //   ArduTalk
-#define DefaultIoTtalkServerIP  "140.113.199.200"
+#define DefaultIoTtalkServerURL  "http://iottalk.niu.edu.tw/play/"
 #define DM_name  "NodeMCU" 
 #define DF_list  {"D0~","D1~","D2~","D5","D6","D7","D8","A0"}
 #define nODF     10  // The max number of ODFs which the DA can pull.
 
-#include <ESP8266WiFi.h>
-//#include <WiFiClient.h>
-#include <ESP8266WebServer.h>
-#include <ESP8266WiFiMulti.h>
-#include "ESP8266HTTPClient2.h"
+#define ON_BOARD_LED_PIN 7
+#define ON_BOARD_BTN_PIN 6
+
+// linkit 7697 HTTP wrapper
+#include "wrapper/server/ServerWrapper.cpp"
+#include "wrapper/client/ClientWrapper.cpp"
 #include <EEPROM.h>
 
-char IoTtalkServerIP[100] = "";
+char IoTtalkServerURL[100] = "";
 String result;
 String url = "";
 String passwordkey ="";
-HTTPClient http;
+ClientWrapper http;
+
+String ap_info;
 
 String remove_ws(const String& str )
 {
@@ -27,15 +30,16 @@ String remove_ws(const String& str )
 void clr_eeprom(int sw=0){
     if (!sw){
         Serial.println("Count down 3 seconds to clear EEPROM.");
-        digitalWrite(2,LOW);
+        digitalWrite(ON_BOARD_LED_PIN,LOW);
         delay(3000);
     }
-    if( (digitalRead(0) == LOW) || (sw == 1) ){
+    if( (digitalRead(ON_BOARD_BTN_PIN) == LOW) || (sw == 1) ){
         for(int addr=0; addr<50; addr++) EEPROM.write(addr,0);   // clear eeprom
-        EEPROM.commit();
+//        EEPROM.commit();
         Serial.println("Clear EEPROM and reboot.");
-        digitalWrite(2,HIGH);
-        ESP.reset();
+        digitalWrite(ON_BOARD_LED_PIN,HIGH);
+//        ESP.reset();
+        for(int i = 0; i < EEPROM.length(); i++) EEPROM.write(i, 0);
     }
 }
 
@@ -49,7 +53,7 @@ void save_netInfo(char *wifiSSID, char *wifiPASS, char *ServerIP){  //stoage for
         if(j<2) EEPROM.write(addr++,',');
     }
     EEPROM.write (addr++,']');
-    EEPROM.commit();
+//    EEPROM.commit();
 }
 
 int read_netInfo(char *wifiSSID, char *wifiPASS, char *ServerIP){   // storage format: [SSID,PASS,ServerIP]
@@ -68,15 +72,17 @@ int read_netInfo(char *wifiSSID, char *wifiPASS, char *ServerIP){   // storage f
             }
             readdata.toCharArray(netInfo[i],100);
         }
- 
-        if (String(ServerIP).length () < 7){
-            Serial.println("ServerIP loading failed.");
-            return 2;
-        }
-        else{ 
-            Serial.println("Load setting successfully.");
-            return 0;
-        }
+        
+        Serial.println("ServerIP loading failed.");
+        return 2;
+        // if (String(ServerIP).length () < 7){
+        //     Serial.println("ServerIP loading failed.");
+        //     return 2;
+        // }
+        // else{ 
+        //     Serial.println("Load setting successfully.");
+        //     return 0;
+        // }
     }
     else{
         Serial.println("no data in eeprom");
@@ -87,20 +93,39 @@ int read_netInfo(char *wifiSSID, char *wifiPASS, char *ServerIP){   // storage f
 
 String scan_network(void){
     int AP_N,i;  //AP_N: AP number 
+
+    // scan for nearby networks:
+    Serial.println("** Scan Networks **");
+    AP_N = WiFi.scanNetworks();
+    if (AP_N == -1) {
+        Serial.println("Couldn't get a wifi connection");
+    }
+
+    // print the list of networks seen:
+    Serial.print("number of available networks:");
+    Serial.println(AP_N);
+
+    // combine the ssid list to html
     String AP_List="<select name=\"SSID\" style=\"width: 150px; font-size:16px; color:blue; \" required>" ;// make ap_name in a string
     AP_List += "<option value=\"\" disabled selected>Select AP</option>";
-  
-    WiFi.disconnect();
-    delay(100);
-    AP_N = WiFi.scanNetworks();
 
-    if(AP_N>0) for (i=0;i<AP_N;i++) AP_List += "<option value=\""+WiFi.SSID(i)+"\">" + WiFi.SSID(i) + "</option>";
+    if(AP_N > 0) {
+        for (i = 0; i < AP_N; i++) {
+            AP_List += "<option value=\""+String((char*) WiFi.SSID(i))+"\">" + String((char*) WiFi.SSID(i)) + "</option>";
+            Serial.print(i);
+            Serial.print(") ");
+            Serial.print(WiFi.SSID(i));
+            Serial.print("\tSignal: ");
+            Serial.print(WiFi.RSSI(i));
+            Serial.println(" dBm");
+        }
+    }
     else AP_List = "<option value=\"\">NO AP</option>";
     AP_List +="</select><br><br>";
     return(AP_List); 
 }
 
-ESP8266WebServer server ( 80 );
+ServerWrapper server ( 80 );
 void handleRoot(int retry){
   String temp = "<html><title>Wi-Fi Setting</title>";
   temp += "<head><meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"/>";
@@ -108,12 +133,12 @@ void handleRoot(int retry){
   if (retry) temp += "<font color=\"#FF0000\">Please fill all fields.</font>";
   temp += "<form action=\"setup\"><div>";
   temp += "<center>SSID:<br>";
-  temp += scan_network(); 
+  temp += ap_info; 
   temp += "Password:<br>";
   temp += "<input type=\"password\" name=\"Password\" vplaceholder=\"Password\" style=\"width: 150px; font-size:16px; color:blue; \">";
-  temp += "<br><br>IoTtalk Server IP <br>";  
+  temp += "<br><br>IoTtalk Server URL <br>";  
   temp += "<input type=\"serverIP\" name=\"serverIP\" value=\"";
-  temp += DefaultIoTtalkServerIP; 
+  temp += DefaultIoTtalkServerURL; 
   temp += "\" style=\"width: 150px; font-size:16px; color:blue;\" required>";
   temp += "<br><br><input style=\"-webkit-border-radius: 11; -moz-border-radius: 11";
   temp += "border-radius: 0px;";
@@ -142,10 +167,10 @@ void saveInfoAndConnectToWiFi() {
     if (server.arg(0) != "" && server.arg(2) != ""){//arg[0]-> SSID, arg[1]-> password (both string)
         server.arg(0).toCharArray(_SSID_,100);
         server.arg(1).toCharArray(_PASS_,100);
-        server.arg(2).toCharArray(IoTtalkServerIP,100);
+        server.arg(2).toCharArray(IoTtalkServerURL,100);
         server.send(200, "text/html", "<html><body><center><span style=\" font-size:72px; color:blue; margin:100px; \"> Setup successfully. </span></center></body></html>");
         server.stop();
-        save_netInfo(_SSID_, _PASS_, IoTtalkServerIP);
+        save_netInfo(_SSID_, _PASS_, IoTtalkServerURL);
         connect_to_wifi(_SSID_, _PASS_);      
     }
     else {
@@ -158,11 +183,16 @@ void start_web_server(void){
     server.on ( "/", [](){handleRoot(0);} );
     server.on ( "/setup", saveInfoAndConnectToWiFi);
     server.onNotFound ( handleNotFound );
-    server.begin();  
+    server.begin();   
 }
 
 
 void wifi_setting(void){
+    // Scan Network first
+    Serial.println("Scanning network.");
+    ap_info = scan_network();
+
+    Serial.println("Start AP.");
     String softapname = "MCU-";
     uint8_t MAC_array[6];
     WiFi.macAddress(MAC_array);
@@ -174,8 +204,8 @@ void wifi_setting(void){
     IPAddress ip(192,168,0,1);
     IPAddress gateway(192,168,0,1);
     IPAddress subnet(255,255,255,0);  
-    WiFi.mode(WIFI_AP_STA);
-    WiFi.disconnect();
+    // WiFi.mode(WIFI_AP_STA);
+    // WiFi.disconnect();
     WiFi.softAPConfig(ip,gateway,subnet);
     WiFi.softAP(&softapname[0]);
     start_web_server();
@@ -188,6 +218,7 @@ void connect_to_wifi(char *wifiSSID, char *wifiPASS){
   
   WiFi.softAPdisconnect(true);
   Serial.println("-----Connect to Wi-Fi-----");
+  Serial.println("SSID : " + String(wifiSSID) + " PASS : " + String(wifiPASS));
   WiFi.begin(wifiSSID, wifiPASS);
   
   while (WiFi.status() != WL_CONNECTED && (millis() - connecttimeout < 10000) ) {
@@ -197,7 +228,7 @@ void connect_to_wifi(char *wifiSSID, char *wifiPASS){
 
   if(WiFi.status() == WL_CONNECTED){
     Serial.println ( "Connected!\n");
-    digitalWrite(2,LOW);
+    digitalWrite(ON_BOARD_LED_PIN,LOW);
     wifimode = 0;
   }
   else if (millis() - connecttimeout > 10000){
@@ -210,7 +241,7 @@ void connect_to_wifi(char *wifiSSID, char *wifiPASS){
 
 
 int iottalk_register(void){
-    url = "http://" + String(IoTtalkServerIP) + ":9999/";  
+    url = String(IoTtalkServerURL);  
     
     String df_list[] = DF_list;
     int n_of_DF = sizeof(df_list)/sizeof(df_list[0]); // the number of DFs in the DF_list
@@ -278,7 +309,7 @@ int push(char *df_name, String value){
     if (httpCode != 200) Serial.println("[HTTP] PUSH \"" + String(df_name) + "\"... code: " + (String)httpCode + ", retry to register.");
     while (httpCode != 200){
         digitalWrite(4, LOW);
-        digitalWrite(2, HIGH);
+        digitalWrite(ON_BOARD_LED_PIN, HIGH);
         httpCode = iottalk_register();
         if (httpCode == 200){
             http.PUT(data);
@@ -299,7 +330,7 @@ String pull(char *df_name){
     if (httpCode != 200) Serial.println("[HTTP] "+url + String(df_name)+" PULL \"" + String(df_name) + "\"... code: " + (String)httpCode + ", retry to register.");
     while (httpCode != 200){
         digitalWrite(4, LOW);
-        digitalWrite(2, HIGH);
+        digitalWrite(ON_BOARD_LED_PIN, HIGH);
         httpCode = iottalk_register();
         if (httpCode == 200){
             http.GET();
@@ -343,9 +374,9 @@ String pull(char *df_name){
 long sensorValue, suspend = 0;
 long cycleTimestamp = millis();
 void setup() {
-    pinMode(2, OUTPUT);// D4 : on board led
-    digitalWrite(2,HIGH);
-    pinMode(0, INPUT_PULLUP); // D3, GPIO0: clear eeprom button
+    pinMode(ON_BOARD_LED_PIN, OUTPUT);// D4 : on board led
+    digitalWrite(ON_BOARD_LED_PIN,HIGH);
+    pinMode(ON_BOARD_BTN_PIN, INPUT_PULLUP); // D3, GPIO0: clear eeprom button
 
     pinMode(16, OUTPUT);// D0~    
     pinMode(5, OUTPUT); // D1~    
@@ -355,12 +386,12 @@ void setup() {
     pinMode(13, OUTPUT);// D7        
     pinMode(15, OUTPUT);// D8        
 
-    EEPROM.begin(512);
+//    EEPROM.begin(512);
     Serial.begin(115200);
 
     char wifissid[100]="";
     char wifipass[100]="";
-    int statesCode = read_netInfo(wifissid, wifipass, IoTtalkServerIP);
+    int statesCode = read_netInfo(wifissid, wifipass, IoTtalkServerURL);
     //for (int k=0; k<50; k++) Serial.printf("%c", EEPROM.read(k) );  //inspect EEPROM data for the debug purpose.
   
     if (!statesCode)  connect_to_wifi(wifissid, wifipass);
@@ -370,8 +401,9 @@ void setup() {
     }
 
     while(wifimode){
-        server.handleClient(); //waitting for connecting to AP ;
-        delay(10);
+        // server.handleClient(); //waitting for connecting to AP ;
+        server.accept();
+        // delay(10);
     }
 
     statesCode = 0;
@@ -379,7 +411,7 @@ void setup() {
         statesCode = iottalk_register();
         if (statesCode != 200){
             Serial.println("Retry to register to the IoTtalk server. Suspend 3 seconds.");
-            if (digitalRead(0) == LOW) clr_eeprom();
+            if (digitalRead(ON_BOARD_BTN_PIN) == LOW) clr_eeprom();
             delay(3000);
         }
     }
@@ -400,7 +432,7 @@ long LEDflashCycle = millis();
 long LEDonCycle = millis();
 int LEDhadFlashed = 0;
 void loop() {
-    if (digitalRead(0) == LOW) clr_eeprom();
+    if (digitalRead(ON_BOARD_BTN_PIN) == LOW) clr_eeprom();
 
     if (millis() - cycleTimestamp > 200) {
 
@@ -461,10 +493,10 @@ void loop() {
     }
 
     if (!LEDhadFlashed){
-      digitalWrite(2, 0);
+      digitalWrite(ON_BOARD_LED_PIN, 0);
       LEDhadFlashed = 1;
       LEDonCycle = millis();
     }
 
-    if (millis()-LEDonCycle > 1) digitalWrite(2, 1);
+    if (millis()-LEDonCycle > 1) digitalWrite(ON_BOARD_LED_PIN, 1);
 }
