@@ -11,6 +11,7 @@
 #include "wrapper/server/ServerWrapper.cpp"
 #include "wrapper/client/ClientWrapper.cpp"
 #include <EEPROM.h>
+#include <LWatchDog.h>
 
 char IoTtalkServerURL[100] = "";
 String result;
@@ -18,6 +19,7 @@ String url = "";
 String passwordkey ="";
 ClientWrapper http;
 
+unsigned long lastResetPressTime;
 String ap_info;
 
 String remove_ws(const String& str )
@@ -27,19 +29,38 @@ String remove_ws(const String& str )
     return str_no_ws ;
 }
 
-void clr_eeprom(int sw=0){
-    if (!sw){
-        Serial.println("Count down 3 seconds to clear EEPROM.");
-        digitalWrite(ON_BOARD_LED_PIN,LOW);
-        delay(3000);
-    }
-    if( (digitalRead(ON_BOARD_BTN_PIN) == LOW) || (sw == 1) ){
-        for(int addr=0; addr<50; addr++) EEPROM.write(addr,0);   // clear eeprom
-//        EEPROM.commit();
+void clr_eeprom(){
+    bool reset = false;
+    int sig = digitalRead(ON_BOARD_BTN_PIN);
+
+    if(sig == 1) {
+      Serial.println("Count down 3 seconds to clear EEPROM.");
+
+      digitalWrite(ON_BOARD_LED_PIN, HIGH);
+      lastResetPressTime = millis();
+      while(digitalRead(ON_BOARD_BTN_PIN)) {
+        if(millis() - lastResetPressTime >= 3000) {
+          reset = true;
+          break;
+        }
+      }
+
+      if(reset) {
+        digitalWrite(ON_BOARD_LED_PIN, LOW);
+        
         Serial.println("Clear EEPROM and reboot.");
-        digitalWrite(ON_BOARD_LED_PIN,HIGH);
-//        ESP.reset();
         for(int i = 0; i < EEPROM.length(); i++) EEPROM.write(i, 0);
+        
+        if(digitalRead(ON_BOARD_BTN_PIN)) {
+          Serial.println("Please release button to reboot.");
+          while(digitalRead(ON_BOARD_BTN_PIN));
+        }
+        // Use watch dog to reboot
+        LWatchDog.begin(1);
+        Serial.println("Reboot in 1 second. Please wait.");
+      } else {
+        Serial.println("Cancel.");
+      }
     }
 }
 
@@ -72,17 +93,15 @@ int read_netInfo(char *wifiSSID, char *wifiPASS, char *ServerIP){   // storage f
             }
             readdata.toCharArray(netInfo[i],100);
         }
-        
-        Serial.println("ServerIP loading failed.");
-        return 2;
-        // if (String(ServerIP).length () < 7){
-        //     Serial.println("ServerIP loading failed.");
-        //     return 2;
-        // }
-        // else{ 
-        //     Serial.println("Load setting successfully.");
-        //     return 0;
-        // }
+
+        if (String(ServerIP).length () < 7){
+            Serial.println("ServerIP loading failed.");
+            return 2;
+        }
+        else{ 
+            Serial.println("Load setting successfully.");
+            return 0;
+        }
     }
     else{
         Serial.println("no data in eeprom");
@@ -167,10 +186,20 @@ void saveInfoAndConnectToWiFi() {
     if (server.arg(0) != "" && server.arg(2) != ""){//arg[0]-> SSID, arg[1]-> password (both string)
         server.arg(0).toCharArray(_SSID_,100);
         server.arg(1).toCharArray(_PASS_,100);
-        server.arg(2).toCharArray(IoTtalkServerURL,100);
+        String urlTemp = server.arg(2);
+        urlTemp.replace("%3A", ":");
+        urlTemp.replace("%3a", ":");
+        urlTemp.replace("%2F", "/");
+        urlTemp.replace("%2f", "/");
+        urlTemp.replace("%20", " ");
+        urlTemp.replace("+", " ");
+        urlTemp.toCharArray(IoTtalkServerURL,100);
         server.send(200, "text/html", "<html><body><center><span style=\" font-size:72px; color:blue; margin:100px; \"> Setup successfully. </span></center></body></html>");
         server.stop();
         save_netInfo(_SSID_, _PASS_, IoTtalkServerURL);
+
+        WiFi.softAPdisconnect(true);
+        delay(100);
         connect_to_wifi(_SSID_, _PASS_);      
     }
     else {
@@ -216,10 +245,11 @@ uint8_t wifimode = 1; //1:AP , 0: STA
 void connect_to_wifi(char *wifiSSID, char *wifiPASS){
   long connecttimeout = millis();
   
-  WiFi.softAPdisconnect(true);
   Serial.println("-----Connect to Wi-Fi-----");
-  Serial.println("SSID : " + String(wifiSSID) + " PASS : " + String(wifiPASS));
-  WiFi.begin(wifiSSID, wifiPASS);
+  String fixWifiSSID = String(wifiSSID);
+  fixWifiSSID.replace("+", " ");
+  Serial.println("SSID : \"" + fixWifiSSID + "\"");
+  WiFi.begin(fixWifiSSID.c_str(), wifiPASS);
   
   while (WiFi.status() != WL_CONNECTED && (millis() - connecttimeout < 10000) ) {
       delay(1000);
@@ -376,7 +406,9 @@ long cycleTimestamp = millis();
 void setup() {
     pinMode(ON_BOARD_LED_PIN, OUTPUT);// D4 : on board led
     digitalWrite(ON_BOARD_LED_PIN,HIGH);
-    pinMode(ON_BOARD_BTN_PIN, INPUT_PULLUP); // D3, GPIO0: clear eeprom button
+    // pinMode(ON_BOARD_BTN_PIN, INPUT_PULLUP); // D3, GPIO0: clear eeprom button
+    // clear eeprom button (use interrupt instead.)
+    attachInterrupt(ON_BOARD_BTN_PIN, clr_eeprom, CHANGE); 
 
     pinMode(16, OUTPUT);// D0~    
     pinMode(5, OUTPUT); // D1~    
@@ -411,7 +443,7 @@ void setup() {
         statesCode = iottalk_register();
         if (statesCode != 200){
             Serial.println("Retry to register to the IoTtalk server. Suspend 3 seconds.");
-            if (digitalRead(ON_BOARD_BTN_PIN) == LOW) clr_eeprom();
+            // if (digitalRead(ON_BOARD_BTN_PIN) == LOW) clr_eeprom();
             delay(3000);
         }
     }
@@ -432,7 +464,7 @@ long LEDflashCycle = millis();
 long LEDonCycle = millis();
 int LEDhadFlashed = 0;
 void loop() {
-    if (digitalRead(ON_BOARD_BTN_PIN) == LOW) clr_eeprom();
+    // if (digitalRead(ON_BOARD_BTN_PIN) == LOW) clr_eeprom();
 
     if (millis() - cycleTimestamp > 200) {
 
