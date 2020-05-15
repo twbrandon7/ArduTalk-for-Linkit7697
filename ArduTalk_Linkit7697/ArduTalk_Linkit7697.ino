@@ -22,6 +22,7 @@ ClientWrapper http;
 unsigned long lastResetPressTime;
 String ap_info;
 
+// remove white space
 String remove_ws(const String& str )
 {
     String str_no_ws ;
@@ -375,30 +376,45 @@ String pull(char *df_name){
     http.end();
 
     get_ret_str = remove_ws(get_ret_str);
+    // remove "endl"
+    get_ret_str.replace("\r", "");
+    get_ret_str.replace("\n", "");
+
     int string_index = 0;
-    string_index = get_ret_str.indexOf("[",string_index);
-    String portion = "";  //This portion is used to fetch the timestamp.
-    if (get_ret_str[string_index+1] == '[' &&  get_ret_str[string_index+2] == '\"'){
-        string_index += 3;
-        while (get_ret_str[string_index] != '\"'){
-          portion += get_ret_str[string_index];
-          string_index+=1;
-        }
-        
-        if (df_timestamp[DFindex(df_name)] != portion){
-            df_timestamp[DFindex(df_name)] = portion;
-            string_index = get_ret_str.indexOf("[",string_index);
-            string_index += 1;
-            portion = ""; //This portion is used to fetch the data.
-            while (get_ret_str[string_index] != ']'){
-                portion += get_ret_str[string_index];
-                string_index+=1;
-            }
-            return portion;   // return the data.
-         }
-         else return "___NULL_DATA___";
+
+    // skip string "samples"
+    string_index = get_ret_str.indexOf("samples", string_index) + 1;
+    string_index = get_ret_str.indexOf("[", string_index) + 1;
+    // point to the first element of samples
+    string_index = get_ret_str.indexOf("[", string_index);
+
+    // find the position of \" and \"
+    int posStartQuotation, posEndQuotation;
+    posStartQuotation = get_ret_str.indexOf("\"", string_index);
+    posEndQuotation = get_ret_str.indexOf("\"", posStartQuotation+1);
+
+    // extract string between \" and \"
+    String timestamp = "";
+    for(int i = posStartQuotation+1; i < posEndQuotation; i++) {
+        timestamp += get_ret_str[i];
     }
-    else return "___NULL_DATA___";
+
+    if (df_timestamp[DFindex(df_name)] != timestamp){
+        // find the position of [ and ]
+        int posStartBrackets, posEndBrackets;
+        posStartBrackets = get_ret_str.indexOf("[", posEndQuotation);
+        posEndBrackets = get_ret_str.indexOf("]", posStartBrackets+1);
+
+        // extract string between [ and ]
+        String data = "";
+        for(int i = posStartBrackets+1; i < posEndBrackets; i++) {
+        data += get_ret_str[i];
+        }
+
+        return data;
+    } else {
+        return "___NULL_DATA___";
+    }
 }
 
 long sensorValue, suspend = 0;
