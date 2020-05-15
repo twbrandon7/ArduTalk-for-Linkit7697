@@ -431,6 +431,7 @@ void setup() {
     // clear eeprom button (use interrupt instead.)
     attachInterrupt(ON_BOARD_BTN_PIN, clr_eeprom, CHANGE); 
 
+    pinMode(0, INPUT);
     pinMode(16, OUTPUT);// D0~    
     pinMode(5, OUTPUT); // D1~    
     pinMode(4, OUTPUT); // D2~
@@ -489,7 +490,7 @@ void loop() {
 
     if (millis() - cycleTimestamp > 200) {
 
-        pinA0 = analogRead(A0);
+        pinA0 = analogRead(0);
         push("A0", String(pinA0));
 
         result = pull("D0~");
