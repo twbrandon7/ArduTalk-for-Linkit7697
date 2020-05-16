@@ -1,7 +1,7 @@
 //   ArduTalk
 #define DefaultIoTtalkServerURL  "http://iottalk.niu.edu.tw/play/"
-#define DM_name  "NodeMCU" 
-#define DF_list  {"D0~","D1~","D2~","D5","D6","D7","D8","A0"}
+#define DM_name  "Linkit7697" 
+#define DF_list  {"P0","P1","P2","P3","P4~","P5~","P8~","P9~", "P10", "P11", "P12", "P13", "P14~", "P15~", "P16~", "P17~"}
 #define nODF     10  // The max number of ODFs which the DA can pull.
 
 #define ON_BOARD_LED_PIN 7
@@ -431,14 +431,25 @@ void setup() {
     // clear eeprom button (use interrupt instead.)
     attachInterrupt(ON_BOARD_BTN_PIN, clr_eeprom, CHANGE); 
 
+    // IDF
     pinMode(0, INPUT);
-    pinMode(16, OUTPUT);// D0~    
-    pinMode(5, OUTPUT); // D1~    
-    pinMode(4, OUTPUT); // D2~
-    pinMode(14, OUTPUT);// D5
-    pinMode(12, OUTPUT);// D6    
-    pinMode(13, OUTPUT);// D7        
-    pinMode(15, OUTPUT);// D8        
+    pinMode(1, INPUT);
+    pinMode(2, INPUT);
+    pinMode(3, INPUT);
+    pinMode(4, INPUT);
+    pinMode(5, INPUT);
+    pinMode(8, INPUT);
+    pinMode(9, INPUT);
+
+    // ODF
+    pinMode(10, OUTPUT);
+    pinMode(11, OUTPUT);
+    pinMode(12, OUTPUT);
+    pinMode(13, OUTPUT);
+    pinMode(14, OUTPUT);
+    pinMode(15, OUTPUT);
+    pinMode(16, OUTPUT);
+    pinMode(17, OUTPUT);
 
 //    EEPROM.begin(512);
     Serial.begin(115200);
@@ -470,16 +481,37 @@ void setup() {
         }
     }
     init_ODFtimestamp();
-
-    digitalWrite(16,LOW);
-    digitalWrite(5,LOW);    
-    digitalWrite(ON_BOARD_LED_PIN,LOW);
-    digitalWrite(14,LOW);    
-    digitalWrite(12,LOW);    
-    digitalWrite(13,LOW);    
-    digitalWrite(15,LOW);    
 }
 
+void pushIDF(char* idf_name, int pin, bool isDigital) {
+    int val;
+    if(isDigital) {
+        val = digitalRead(pin);
+    } else {
+        val = analogRead(pin);
+    }
+    
+    push(idf_name, String(val));
+}
+
+void pullODF(char* odf_name, int pin, bool isDigital) {
+    String result = pull(odf_name);
+    if (!result.equals("___NULL_DATA___")){
+        Serial.println (String(odf_name)+": "+result);
+        int parsed = result.toInt();
+        if(isDigital) {
+            if (parsed > 0 ) {
+                digitalWrite(pin, HIGH);
+            } else {
+                digitalWrite(pin, LOW);
+            }
+        } else {
+            if (parsed >= 0 && parsed <= 255) {
+                analogWrite(pin, parsed);
+            }
+        }
+    }
+}
 
 int pinA0; 
 long LEDflashCycle = millis();
@@ -490,54 +522,30 @@ void loop() {
 
     if (millis() - cycleTimestamp > 200) {
 
-        pinA0 = analogRead(0);
-        push("A0", String(pinA0));
+        // P0 ~ P3 : digital input
+        pushIDF("P0", 0, true);
+        pushIDF("P1", 1, true);
+        pushIDF("P2", 2, true);
+        pushIDF("P3", 3, true);
 
-        result = pull("D0~");
-        if (result != "___NULL_DATA___"){
-            Serial.println ("D0~: "+result);
-            if (result.toInt() >= 0 && result.toInt() <= 255) analogWrite(16, result.toInt());
-        }
+        // P4, P5, P8, P9 : analog input
+        pushIDF("P4~", 4, false);
+        pushIDF("P5~", 5, false);
+        pushIDF("P8~", 8, false);
+        pushIDF("P9~", 9, false);
 
-        result = pull("D1~");
-        if (result != "___NULL_DATA___"){
-            Serial.println ("D1~: "+result);
-            if (result.toInt() >= 0 && result.toInt() <= 255) analogWrite(5, result.toInt());
-        }    
+        // P10 ~ P13 : digital output
+        pullODF("P10", 10, true);
+        pullODF("P11", 11, true);
+        pullODF("P12", 12, true);
+        pullODF("P13", 13, true);
 
-        result = pull("D2~");
-        if (result != "___NULL_DATA___"){
-            Serial.println ("D2~: "+result);
-            if (result.toInt() >= 0 && result.toInt() <= 255) analogWrite(4, result.toInt());
-        }
+        // P14 ~ P17 : analog output
+        pullODF("P14~", 14, false);
+        pullODF("P15~", 15, false);
+        pullODF("P16~", 16, false);
+        pullODF("P17~", 17, false);
 
-        result = pull("D5");
-        if (result != "___NULL_DATA___"){
-            Serial.println ("D5: "+result);
-            if (result.toInt() > 0 ) digitalWrite(14, 1);
-            else digitalWrite(14, 0);
-        }
-
-        result = pull("D6");
-        if (result != "___NULL_DATA___"){
-            Serial.println ("D6: "+result);
-            if (result.toInt() > 0 ) digitalWrite(12, 1);
-            else digitalWrite(12, 0);
-        }
-        
-        result = pull("D7");
-        if (result != "___NULL_DATA___"){
-            Serial.println ("D7: "+result);
-            if (result.toInt() > 0 ) digitalWrite(13, 1);
-            else digitalWrite(13, 0);
-        }
-
-        result = pull("D8");
-        if (result != "___NULL_DATA___"){
-            Serial.println ("D8: "+result);
-            if (result.toInt() > 0 ) digitalWrite(15, 1);
-            else digitalWrite(15, 0);
-        }
         cycleTimestamp = millis();
     }
 
