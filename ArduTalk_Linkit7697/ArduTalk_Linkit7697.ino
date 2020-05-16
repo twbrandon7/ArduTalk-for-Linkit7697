@@ -354,7 +354,7 @@ int push(char *df_name, String value){
 
 String pull(char *df_name){
     http.begin( url + String(df_name) );
-   Serial.println(url + String(df_name));
+    Serial.println(url + String(df_name));
     http.addHeader("Content-Type","application/json");
     int httpCode = http.GET(); //http state code
     
@@ -541,16 +541,17 @@ void loop() {
         cycleTimestamp = millis();
     }
 
-    if (millis() - LEDflashCycle > 2000){
+    // LED blinking
+
+    if (!LEDhadFlashed && millis() - LEDflashCycle > 2000){
+        LEDhadFlashed = 1;
+        digitalWrite(ON_BOARD_LED_PIN, HIGH);
+        LEDonCycle = millis();
+    }
+
+    if (LEDhadFlashed && millis()-LEDonCycle > 100) {
+        digitalWrite(ON_BOARD_LED_PIN, LOW);
         LEDhadFlashed = 0;
         LEDflashCycle = millis();
     }
-
-    if (!LEDhadFlashed){
-      digitalWrite(ON_BOARD_LED_PIN, LOW);
-      LEDhadFlashed = 1;
-      LEDonCycle = millis();
-    }
-
-    if (millis()-LEDonCycle > 1) digitalWrite(ON_BOARD_LED_PIN, HIGH);
 }
