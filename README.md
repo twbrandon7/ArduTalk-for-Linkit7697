@@ -1,16 +1,13 @@
-# ArduTalk for NodeMCU
+# ArduTalk for Linkit 7697
 
-Implement ArduTalk on NodeMCU (ESP12E).
+Implement ArduTalk on Linkit 7697.
 
-Device Model: "NodeMCU"
+Device Model: "Linkit7697"
 
 The available device features are listed as follows:
 
+IDF: "P0", "P1", "P2", "P3", "P4~", "P5~", "P8~", "P9~"
 
-IDF: "A0"
+ODF: "P10", "P11", "P12", "P13", "P14~", "P15~", "P16~", "P17~"
 
-
-ODF: "D0~","D1~","D2~","D5","D6","D7","D8"
-
-
-where "D0~","D1~","D2~" provide PWM signals.
+where "P4~", "P5~", "P8~", "P9~" recevie analog signal. "P14~", "P15~", "P16~", "P17~" provide PWM signal.
