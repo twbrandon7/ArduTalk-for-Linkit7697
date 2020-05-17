@@ -1,0 +1,3 @@
+[submodule "ArduTalk_Linkit7697/wrapper"] 
+path = ArduTalk_Linkit7697/wrapper 
+url = https://github.com/twbrandon7/Linkit-7697-HTTP-Wrapper.git
